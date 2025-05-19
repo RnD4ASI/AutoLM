@@ -1,0 +1,122 @@
+{
+    "version": "1.0.0",
+    "description": "Schema for graph database storing entity relationships",
+    "node_types": {
+      "document": {
+        "description": "Document-level nodes",
+        "required_properties": {
+          "document_id": {"type": "string", "unique": true},
+          "document_format": {"type": "string"}
+        },
+        "optional_properties": {
+          "title": {"type": "string"},
+          "author": {"type": "string"}, 
+          "commencement_date": {"type": "date"},
+          "expiry_date": {"type": "date"},
+          "jurisdiction": {"type": "string"}
+        }
+      },
+      "section": {
+        "description": "Document section nodes",
+        "required_properties": {
+          "section_id": {"type": "string", "unique": true},
+          "hierarchy": {"type": "string"}
+        },
+        "optional_properties": {
+          "heading": {"type": "string"},
+          "level": {"type": "integer", "min": 1}
+        }
+      },
+      "corpus": {
+        "description": "Content chunk nodes",
+        "required_properties": {
+          "chunk_id": {"type": "string", "unique": true},
+          "content": {"type": "text"},
+          "embedding": {"type": "vector"},
+          "reference": {"type": "string"}
+        },
+        "optional_properties": {
+          "entities": {"type": "array", "items": {"type": "string"}},
+          "sentiment": {"type": "float", "min": -1, "max": 1}
+        }
+      },
+      "concept": {
+        "description": "Extracted concept nodes",
+        "required_properties": {
+          "concept_id": {"type": "string", "unique": true},
+          "name": {"type": "string"}
+        },
+        "optional_properties": {
+          "definition": {"type": "text"},
+          "domain": {"type": "string"}
+        }
+      }
+    },
+    "edge_types": {
+      "CONTAINS": {
+        "description": "Document contains section, section contains content",
+        "source_types": ["document", "section", "corpus"],
+        "target_types": ["section", "corpus", "concept"],
+        "properties": {
+          "order": {"type": "integer", "description": "Order within parent"}
+        }
+      },
+      "PART_OF": {
+        "description": "Inverse of CONTAINS",
+        "source_types": ["section", "corpus", "concept"],
+        "target_types": ["document", "section", "corpus"],
+        "properties": {}
+      },
+      "REFERENCES": {
+        "description": "Cross-references between sections",
+        "source_types": ["section", "corpus"],
+        "target_types": ["section", "corpus"],
+        "properties": {
+          "reference_type": {"type": "string", "enum": ["direct", "indirect", "see_also"]},
+          "strength": {"type": "float", "min": 0, "max": 1}
+        }
+      },
+      "SIMILAR_TO": {
+        "description": "Semantic similarity relationship",
+        "source_types": ["section", "corpus", "concept"],
+        "target_types": ["section", "corpus", "concept"],
+        "properties": {
+          "similarity_score": {"type": "float", "min": 0, "max": 1, "required": true},
+          "similarity_type": {"type": "string", "enum": ["semantic", "structural", "topical"]}
+        }
+      },
+      "PRECEDES": {
+        "description": "Temporal or logical precedence",
+        "source_types": ["section", "corpus", "concept"],
+        "target_types": ["section", "corpus", "concept"],
+        "properties": {
+          "precedence_type": {"type": "string", "enum": ["temporal", "logical", "causal"]}
+        }
+      }
+    },
+    "hypergraph_extensions": {
+      "hyperedge_types": {
+        "section_group": {
+          "description": "Groups sections from same document",
+          "node_types": ["section"],
+          "min_nodes": 3
+        },
+        "topic_cluster": {
+          "description": "Groups content by topic",
+          "node_types": ["corpus"],
+          "min_nodes": 3
+        },
+        "reference_chain": {
+          "description": "Connected references",
+          "node_types": ["corpus"],
+          "min_nodes": 3
+        }
+      }
+    },
+    "indexes": [
+      {"field": "document_id", "type": "btree"},
+      {"field": "section_id", "type": "btree"},
+      {"field": "chunk_id", "type": "btree"},
+      {"field": "concept_id", "type": "btree"}
+    ]
+  }

@@ -1,0 +1,170 @@
+{
+  "version": "1.0.0",
+  "description": "Schema for memory database supporting short-term task memory, short-term goal memory, procedural memory, and meta memory",
+  "collections": {
+    "short_term_task_memory": {
+        "description": "Working memory for individual tasks with retrieved context",
+        "required_fields": {
+            "memory_id": {
+                "type": "string",
+                "description": "Unique identifier for memory entry",
+                "format": "uuid",
+                "indexed": true,
+                "unique": true
+            },
+            "task_id": {
+                "type": "string",
+                "description": "Unique identifier for the task",
+                "format": "varchar(255)",
+                "indexed": true,
+                "unique": false
+            },
+            "original_query": {
+                "type": "text",
+                "description": "The original user query",
+                "max_length": 10000
+            },
+            "retrieved_info": {
+                "type": "jsonb",
+                "description": "Retrieved context and information for this task with metadata" 
+            }
+        },
+        "optional_fields": {
+            "transformed_query": {
+                "type": "text",
+                "description": "Processed/optimized version of the original query"
+            }
+        },
+        "indexes": [
+            {"fields": ["memory_id"], "type": "unique"},
+            {"fields": ["task_id"], "type": "btree"}
+        ]
+    },
+    "short_term_goal_memory": {
+        "description": "Entity-based memory shared across tasks at the goal level",
+        "required_fields": {
+            "entity_id": {
+                "type": "string",
+                "description": "Unique identifier for the entity",
+                "format": "uuid",
+                "indexed": true
+            },
+            "entity_name": {
+                "type": "string",
+                "description": "The entity name or reference",
+                "max_length": 500,
+                "indexed": true
+            },
+            "entity_information": {
+                "type": "jsonb",
+                "description": "Information about the entity and associated metadata"
+            },
+            "information_type": {
+                "type": "string",
+                "description": "Type of information stored",
+                "enum": ["definitional", "procedural", "rationale"],
+                "indexed": true
+            }
+        },
+        "optional_fields": {
+            "goal_context": {
+                "type": "string",
+                "description": "Goal context this entity relates to",
+                "max_length": 255,
+                "indexed": true
+            }
+        },
+        "indexes": [
+            {"fields": ["entity_id"], "type": "btree"},
+            {"fields": ["information_type"], "type": "btree"}
+        ]
+    },
+    "procedural_memory": {
+        "description": "Pipeline optimization configurations (mle.json, pm.json type information)",
+        "required_fields": {
+            "config_id": {
+                "type": "string",
+                "description": "Unique identifier for the configuration",
+                "format": "uuid",
+                "indexed": true
+            },
+            "config_name": {
+                "type": "string",
+                "description": "Name of the configuration",
+                "max_length": 255,
+                "indexed": true
+            },
+            "config_type": {
+                "type": "string",
+                "description": "Type of configuration",
+                "enum": ["mle_config", "pm_config", "swe_config"],
+                "indexed": true
+            },
+            "config_content": {
+                "type": "jsonb",
+                "description": "The actual configuration data"
+            }
+        },
+        "optional_fields": {
+        },
+        "indexes": [
+            {"fields": ["config_name"], "type": "btree"}
+        ]
+    },
+    "meta_memory": {
+        "description": "Behavioral modes and personality configurations",
+        "required_fields": {
+            "mode_id": {
+                "type": "string",
+                "description": "Unique identifier for the mode",
+                "format": "uuid",
+                "indexed": true
+            },
+            "mode_name": {
+                "type": "string",
+                "description": "Name of the mode",
+                "max_length": 255,
+                "unique": true,
+                "indexed": false
+            },
+            "personality_type": {
+                "type": "string",
+                "description": "Type of personality",
+                "enum": ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"],
+                "indexed": false
+            },
+            "cognitive_style": {
+                "type": "string",
+                "description": "Type of cognitive style",
+                "enum": ["analytical", "creative", "systematic", "intuitive", "collaborative"],
+                "indexed": false
+            },
+            "mbti_type": {
+                "type": "string",
+                "description": "MBTI personality type",
+                "pattern": "^[IE][NS][TF][JP]$",
+                "max_length": 4
+            }
+        },
+        "optional_fields": {
+            "mode_description": {
+                "type": "text",
+                "description": "Detailed description of the mode"
+            },
+            "activation_contexts": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Contexts where this mode should be activated"
+            },
+            "activation_triggers": {
+                "type": "jsonb",
+                "description": "Triggers that activate this mode"
+            }
+        },
+        "indexes": [
+            {"fields": ["mode_name"], "type": "btree"}   
+        ]
+    }
+  }
+}
+
