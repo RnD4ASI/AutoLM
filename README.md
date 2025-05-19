@@ -1,4 +1,4 @@
-# Auto GAI
+# AutoLM
 
 ## Project Overview
 Auto GAI is an advanced, modular framework for automated generation, evaluation, and refinement of AI prompts and knowledge bases. It is designed to support research, experimentation, and deployment of prompt engineering workflows, including retrieval-augmented generation, evaluation, and publishing to external platforms.
