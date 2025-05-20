@@ -675,3 +675,4 @@ class RetrievalEvaluator:
         """
         # Simple weighted combination of overlap metrics
         return 0.5 * term_overlap['mean_overlap'] + 0.3 * term_overlap['max_overlap'] + 0.2 * term_overlap['min_overlap']
+

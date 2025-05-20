@@ -148,7 +148,6 @@ class Generator:
             logger.error(f"Invalid model type or missing parameter rules: {model_type}")
             return False
 
-
     def refresh_token(self) -> str:
         """Refreshes the Azure API token.
 
@@ -169,7 +168,6 @@ class Generator:
         except Exception as e:
             logger.error("Failed to refresh token: %s", e)
             raise
-
 
     def get_completion(self, 
                       prompt_id: int,
@@ -750,10 +748,10 @@ class Generator:
         Parameters:
             text (Union[str, List[str]]): Text(s) to embed
             model (Optional[str]): Specific model to use (e.g., "text-embedding-ada-002", "text-embedding-gecko", "claude-3-embedding")
-                                  If None or invalid, falls back to initialized HuggingFace model
+                              If None or invalid, falls back to initialized HuggingFace model
             output_format (str): Output format, either "Array" or "List"
             batch_size (Optional[int]): Maximum number of texts per batch. If None, will be dynamically calculated
-                                     based on token counts and max_tokens_per_batch
+                                 based on token counts and max_tokens_per_batch
             max_tokens_per_batch (int): Maximum number of tokens allowed in a batch
             buffer_ratio (float): Safety ratio for dynamic batch size calculation (default 0.9, i.e. use 90% of token limit)
 
@@ -773,11 +771,17 @@ class Generator:
                     try:
                         logger.info(f"Using Azure OpenAI model '{model}' for embeddings")
                         # Use batch processing for both single and multiple texts
-                        response = self._get_azure_embeddings(
-                            text=text, 
-                            model=model,
-                            max_tokens_per_batch=max_tokens_per_batch
-                        )
+                        # Only pass batch_size if explicitly provided, otherwise let the child function calculate it
+                        kwargs = {
+                            "text": text,
+                            "model": model,
+                            "max_tokens_per_batch": max_tokens_per_batch,
+                            "buffer_ratio": buffer_ratio
+                        }
+                        if batch_size is not None:
+                            kwargs["batch_size"] = batch_size
+                            
+                        response = self._get_azure_embeddings(**kwargs)
                         # Ensure response is in a list format for standardization
                         if isinstance(text, str) and not isinstance(response, list):
                             response = [response]
@@ -788,7 +792,17 @@ class Generator:
                 elif self._validate_model(model, "embedding", "vertex") and not response:
                     try:
                         logger.info(f"Using Google Vertex model '{model}' for embeddings")
-                        response = self._get_vertex_embeddings(text=text, model=model)
+                        # Only pass batch_size if explicitly provided, otherwise let the child function calculate it
+                        kwargs = {
+                            "text": text,
+                            "model": model,
+                            "max_tokens_per_batch": max_tokens_per_batch,
+                            "buffer_ratio": buffer_ratio
+                        }
+                        if batch_size is not None:
+                            kwargs["batch_size"] = batch_size
+                            
+                        response = self._get_vertex_embeddings(**kwargs)
                         # Ensure response is in a list format for standardization
                         if isinstance(text, str) and not isinstance(response[0], List):
                             response = [response]
@@ -799,7 +813,17 @@ class Generator:
                 elif self._validate_model(model, model_type="embedding", provider="anthropic") and not response:
                     try:
                         logger.info(f"Using Anthropic model '{model}' for embeddings")
-                        response = self._get_anthropic_embeddings(text=text, model=model)
+                        # Only pass batch_size if explicitly provided, otherwise let the child function calculate it
+                        kwargs = {
+                            "text": text,
+                            "model": model,
+                            "max_tokens_per_batch": max_tokens_per_batch,
+                            "buffer_ratio": buffer_ratio
+                        }
+                        if batch_size is not None:
+                            kwargs["batch_size"] = batch_size
+                            
+                        response = self._get_anthropic_embeddings(**kwargs)
                         # Ensure response is in a list format for standardization
                         if isinstance(text, str) and not isinstance(response[0], List):
                             response = [response]
@@ -810,12 +834,17 @@ class Generator:
                 elif self._validate_model(model, model_type="embedding", provider="huggingface") and not response:
                     try:
                         logger.info(f"Using HuggingFace model '{model}' for embeddings")
-                        response = self._get_hf_embeddings(
-                            text=text, 
-                            model=model,
-                            batch_size=batch_size,
-                            max_tokens_per_batch=max_tokens_per_batch
-                        )
+                        # Only pass batch_size if explicitly provided, otherwise let the child function calculate it
+                        kwargs = {
+                            "text": text,
+                            "model": model,
+                            "max_tokens_per_batch": max_tokens_per_batch,
+                            "buffer_ratio": buffer_ratio
+                        }
+                        if batch_size is not None:
+                            kwargs["batch_size"] = batch_size
+                            
+                        response = self._get_hf_embeddings(**kwargs)
                         # Ensure response is in a list format for standardization
                         if isinstance(text, str) and isinstance(response, np.ndarray) and response.ndim == 1:
                             response = [response.tolist()]
@@ -828,12 +857,17 @@ class Generator:
             # If no response yet or model not specified, use HuggingFace fallback
             if not response or not model:
                 logger.info(f"Using HuggingFace fallback model '{self.default_hf_embedding_model}' for embeddings")
-                response = self._get_hf_embeddings(
-                    text=text, 
-                    model=self.default_hf_embedding_model,
-                    batch_size=batch_size,
-                    max_tokens_per_batch=max_tokens_per_batch
-                )
+                # Only pass batch_size if explicitly provided, otherwise let the child function calculate it
+                kwargs = {
+                    "text": text,
+                    "model": self.default_hf_embedding_model,
+                    "max_tokens_per_batch": max_tokens_per_batch,
+                    "buffer_ratio": buffer_ratio
+                }
+                if batch_size is not None:
+                    kwargs["batch_size"] = batch_size
+                    
+                response = self._get_hf_embeddings(**kwargs)
                 
                 # Ensure response is in a list format for standardization
                 if isinstance(text, str) and isinstance(response, np.ndarray) and response.ndim == 1:
@@ -975,64 +1009,134 @@ class Generator:
         return all_embeddings[0] if is_single_text else all_embeddings
 
     def _get_vertex_embeddings(self,
-                        text: str,
-                        model: str = "text-embedding-gecko") -> List[float]:
-        """Get embeddings using Google Vertex AI embeddings.
+                        text: Union[str, List[str]],
+                        model: str = "text-embedding-gecko",
+                        batch_size: Optional[int] = None,
+                        max_tokens_per_batch: int = 8000,
+                        buffer_ratio: float = 0.9) -> Union[List[float], List[List[float]]]:
+        """Get embeddings using Google Vertex AI embeddings with batch processing.
         
         Parameters:
-            text (str): Text to embed
+            text (Union[str, List[str]]): Text(s) to embed
             model (str): Google Vertex embedding model to use
+            batch_size (Optional[int]): Maximum number of texts per batch. If None, will be dynamically calculated
+                                      based on token counts and max_tokens_per_batch
+            max_tokens_per_batch (int): Maximum number of tokens allowed in a batch
+            buffer_ratio (float): Safety ratio for dynamic batch size calculation (default 0.9, i.e. use 90% of token limit)
             
         Returns:
-            List[float]: Embedding vector
+            Union[List[float], List[List[float]]]: Embedding vector(s)
         """
         if not self.gemini_api_key:
             raise ValueError("Google Vertex API key is not set. Please set the GEMINI_API_KEY environment variable.")
             
         try:
-            # Process text to handle single strings or lists
-            if isinstance(text, str):
-                texts = [text]
-            else:
-                texts = text
+            # Handle single text case
+            is_single_text = isinstance(text, str)
+            texts = [text] if is_single_text else text
+            
+            # Prepare batching
+            try:
+                import tiktoken
+                encoding = tiktoken.get_encoding("cl100k_base")  # Default encoding
+                token_counts = [len(encoding.encode(t)) for t in texts]
+            except ImportError:
+                logger.warning("tiktoken not installed, using character count as proxy for tokens")
+                token_counts = [len(t) // 4 for t in texts]  # Rough approximation
+            
+            # Dynamically calculate batch_size if not provided
+            if batch_size is None or batch_size <= 0:
+                total_texts = len(texts)
+                if total_texts > 1:
+                    total_tokens = sum(token_counts)
+                    avg_tokens_per_text = total_tokens / total_texts
+                    dynamic_batch_size = max(1, int((max_tokens_per_batch * buffer_ratio) / avg_tokens_per_text))
+                    logger.info(f"Dynamically calculated batch_size: {dynamic_batch_size} (avg tokens/text={avg_tokens_per_text:.2f}, buffer_ratio={buffer_ratio})")
+                    batch_size = dynamic_batch_size
+                else:
+                    batch_size = 1
+            
+            # Create batches
+            batches = []
+            current_batch = []
+            current_tokens = 0
+            
+            for idx, (t, tokens) in enumerate(zip(texts, token_counts)):
+                if tokens > max_tokens_per_batch:
+                    logger.warning(f"Text at index {idx} exceeds max_tokens_per_batch ({tokens} > {max_tokens_per_batch}), truncating")
+                    # Skip oversized text for now
+                    continue
+                    
+                if (current_tokens + tokens > max_tokens_per_batch) or (len(current_batch) >= batch_size):
+                    if current_batch:  # Add the current batch if not empty
+                        batches.append(current_batch)
+                    current_batch = [t]
+                    current_tokens = tokens
+                else:
+                    current_batch.append(t)
+                    current_tokens += tokens
+            
+            if current_batch:  # Add the last batch if not empty
+                batches.append(current_batch)
+            
+            logger.info(f"Processing {len(texts)} texts in {len(batches)} batches using Google Vertex")
+            
+            all_embeddings = []
+            
+            # Initialize the embedding model once outside the batch loop
+            embedding_model = genai.GenerativeModel(model_name=model)
+            
+            # Process each batch
+            for batch_idx, batch_texts in enumerate(batches):
+                logger.info(f"Processing batch {batch_idx+1}/{len(batches)} with {len(batch_texts)} texts")
                 
-            embeddings = []
-            # Process each text separately
-            for single_text in texts:
-                # Initialize the embedding model
-                embedding_model = genai.GenerativeModel(model_name=model)
+                batch_embeddings = []
+                for single_text in batch_texts:
+                    try:
+                        # Generate embedding
+                        embedding_response = embedding_model.embed_content(
+                            model=model,
+                            content=single_text
+                        )
+                        
+                        # Extract and store the embedding vector
+                        embedding_vector = embedding_response.embedding
+                        batch_embeddings.append(embedding_vector)
+                    except Exception as e:
+                        logger.error(f"Error generating embedding for text in batch {batch_idx+1}: {str(e)}")
+                        # Add a zero vector as placeholder for failed embedding
+                        batch_embeddings.append([0.0] * 768)  # Standard dimension for embeddings
                 
-                # Generate embedding
-                embedding_response = embedding_model.embed_content(
-                    model=model,
-                    content=single_text
-                )
-                
-                # Extract and store the embedding vector
-                embedding_vector = embedding_response.embedding
-                embeddings.append(embedding_vector)
-                
+                all_embeddings.extend(batch_embeddings)
+            
             # Return a single embedding for a single input, otherwise return list of embeddings
-            if isinstance(text, str):
-                return embeddings[0]
+            if is_single_text:
+                return all_embeddings[0] if all_embeddings else [0.0] * 768
             else:
-                return embeddings
+                return all_embeddings
                 
         except Exception as e:
             logger.error(f"Error generating Google Vertex embeddings: {str(e)}")
             raise
     
     def _get_anthropic_embeddings(self,
-                          text: str,
-                          model: str = "claude-3-embedding") -> List[float]:
-        """Get embeddings using Anthropic Claude embedding model.
+                          text: Union[str, List[str]],
+                          model: str = "claude-3-embedding",
+                          batch_size: Optional[int] = None,
+                          max_tokens_per_batch: int = 8000,
+                          buffer_ratio: float = 0.9) -> Union[List[float], List[List[float]]]:
+        """Get embeddings using Anthropic Claude embedding model with batch processing.
         
         Parameters:
-            text (str): Text to embed
+            text (Union[str, List[str]]): Text(s) to embed
             model (str): Anthropic Claude embedding model to use
+            batch_size (Optional[int]): Maximum number of texts per batch. If None, will be dynamically calculated
+                                      based on token counts and max_tokens_per_batch
+            max_tokens_per_batch (int): Maximum number of tokens allowed in a batch
+            buffer_ratio (float): Safety ratio for dynamic batch size calculation (default 0.9, i.e. use 90% of token limit)
             
         Returns:
-            List[float]: Embedding vector
+            Union[List[float], List[List[float]]]: Embedding vector(s)
         """
         if not self.claude_api_key:
             raise ValueError("Anthropic API key is not set. Please set the CLAUDE_API_KEY environment variable.")
@@ -1041,30 +1145,86 @@ class Generator:
             # Initialize the Anthropic client
             client = anthropic.Anthropic(api_key=self.claude_api_key)
             
-            # Process text to handle single strings or lists
-            if isinstance(text, str):
-                texts = [text]
-            else:
-                texts = text
+            # Handle single text case
+            is_single_text = isinstance(text, str)
+            texts = [text] if is_single_text else text
+            
+            # Prepare batching
+            try:
+                import tiktoken
+                encoding = tiktoken.get_encoding("cl100k_base")  # Default encoding
+                token_counts = [len(encoding.encode(t)) for t in texts]
+            except ImportError:
+                logger.warning("tiktoken not installed, using character count as proxy for tokens")
+                token_counts = [len(t) // 4 for t in texts]  # Rough approximation
+            
+            # Dynamically calculate batch_size if not provided
+            if batch_size is None or batch_size <= 0:
+                total_texts = len(texts)
+                if total_texts > 1:
+                    total_tokens = sum(token_counts)
+                    avg_tokens_per_text = total_tokens / total_texts
+                    dynamic_batch_size = max(1, int((max_tokens_per_batch * buffer_ratio) / avg_tokens_per_text))
+                    logger.info(f"Dynamically calculated batch_size: {dynamic_batch_size} (avg tokens/text={avg_tokens_per_text:.2f}, buffer_ratio={buffer_ratio})")
+                    batch_size = dynamic_batch_size
+                else:
+                    batch_size = 1
+            
+            # Create batches
+            batches = []
+            current_batch = []
+            current_tokens = 0
+            
+            for idx, (t, tokens) in enumerate(zip(texts, token_counts)):
+                if tokens > max_tokens_per_batch:
+                    logger.warning(f"Text at index {idx} exceeds max_tokens_per_batch ({tokens} > {max_tokens_per_batch}), truncating")
+                    # Skip oversized text for now
+                    continue
+                    
+                if (current_tokens + tokens > max_tokens_per_batch) or (len(current_batch) >= batch_size):
+                    if current_batch:  # Add the current batch if not empty
+                        batches.append(current_batch)
+                    current_batch = [t]
+                    current_tokens = tokens
+                else:
+                    current_batch.append(t)
+                    current_tokens += tokens
+            
+            if current_batch:  # Add the last batch if not empty
+                batches.append(current_batch)
+            
+            logger.info(f"Processing {len(texts)} texts in {len(batches)} batches using Anthropic")
+            
+            all_embeddings = []
+            
+            # Process each batch
+            for batch_idx, batch_texts in enumerate(batches):
+                logger.info(f"Processing batch {batch_idx+1}/{len(batches)} with {len(batch_texts)} texts")
                 
-            embeddings = []
-            # Process each text separately
-            for single_text in texts:
-                # Generate embedding
-                embedding_response = client.embeddings.create(
-                    model=model,
-                    input=single_text
-                )
+                batch_embeddings = []
+                for single_text in batch_texts:
+                    try:
+                        # Generate embedding
+                        embedding_response = client.embeddings.create(
+                            model=model,
+                            input=single_text
+                        )
+                        
+                        # Extract and store the embedding vector
+                        embedding_vector = embedding_response.embeddings[0].embedding
+                        batch_embeddings.append(embedding_vector)
+                    except Exception as e:
+                        logger.error(f"Error generating embedding for text in batch {batch_idx+1}: {str(e)}")
+                        # Add a zero vector as placeholder for failed embedding
+                        batch_embeddings.append([0.0] * 1024)  # Standard dimension for Claude embeddings
                 
-                # Extract and store the embedding vector
-                embedding_vector = embedding_response.embeddings[0].embedding
-                embeddings.append(embedding_vector)
-                
+                all_embeddings.extend(batch_embeddings)
+            
             # Return a single embedding for a single input, otherwise return list of embeddings
-            if isinstance(text, str):
-                return embeddings[0]
+            if is_single_text:
+                return all_embeddings[0] if all_embeddings else [0.0] * 1024
             else:
-                return embeddings
+                return all_embeddings
                 
         except Exception as e:
             logger.error(f"Error generating Anthropic embeddings: {str(e)}")
@@ -1197,7 +1357,6 @@ class Generator:
                 return np.zeros(384)  # Standard embedding dimension
             else:
                 return np.array([np.zeros(384) for _ in range(len(texts))])
-
 
     def get_reranking(self,
                     query: str,
