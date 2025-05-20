@@ -54,8 +54,36 @@ planner.py:
 - src.utility (AIUtility, DataUtility)
 - src.evaluator (Evaluator)
 
-service/runner.py:
+contextualiser.py:
+- src.logging
+- src.utility (AIUtility, DataUtility, StatisticsUtility)
+- src.generator (Generator, MetaGenerator)
+- src.evaluator (Evaluator)
+- src.dbbuilder (TextParser, TextChunker, VectorBuilder, GraphBuilder)
+- src.retriever (VectorDBRetrievalProcessor, GraphDBRetrievalProcessor, QueryProcessor, InfoRetriever)
+- src.topologist (PromptTopology, ScalingTopology)
+- src.editor (TemplateAdopter)
+
+executor.py:
+- src.logging
+- src.utility (AIUtility, DataUtility)
+- src.generator (Generator, MetaGenerator)
+- src.evaluator (Evaluator)
+- src.contextualiser (ContextManager)
+- src.topologist (PromptTopology, ScalingTopology)
+- src.editor (TemplateAdopter)
+
+runner.py (service):
+- src.logging
+- src.utility (DataUtility, AIUtility, StatisticsUtility)
+- src.generator (Generator, MetaGenerator)
+- src.evaluator (Evaluator)
+- src.editor (TemplateAdopter)
+- src.dbbuilder (TextParser, TextChunker, VectorBuilder, GraphBuilder)
+- src.retriever (QueryProcessor, VectorDBRetrievalProcessor, GraphDBRetrievalProcessor, InfoRetriever)
 - src.planner (TaskPlanner)
+- src.executor (ContextManager, ExecutionEngine)
+- src.publisher (ConfluencePublisher)
 ```
 
 ## 2. Import Hierarchy (Dependency Tree)
@@ -83,80 +111,210 @@ publisher.py (depends on logging)
 ↓
 retriever.py (depends on logging, dbbuilder, generator, utility, evaluator)
 ↓
-service/runner.py (depends on planner)
+contextualiser.py (depends on logging, utility, generator, evaluator, dbbuilder, retriever, topologist, editor)
+↓
+executor.py (depends on logging, utility, generator, evaluator, contextualiser, topologist, editor)
+↓
+runner.py (service - depends on all core modules)
 ```
 
 ### Mermaid Diagram of Module Dependencies
 
 ```mermaid
-graph TD
-    A[logging.py] --> B[utility.py]
-    B --> C[generator.py]
-    B --> D[editor.py]
-    B --> I[publisher.py]
-    C --> E[evaluator.py]
-    C --> G[dbbuilder.py]
-    D --> F[topologist.py]
-    E --> F
-    E --> H[retriever.py]
-    E --> J[planner.py]
-    G --> H
-    J --> K[service/runner.py]
+graph TB
+    %% Legend at the very top with distinct background
+    subgraph Legend ["Module Legend"]
+        direction TB
+        L1[Base Level Module]:::base
+        L2[Mid Level Module]:::mid
+        L3[High Level Module]:::high
+        L4[Orchestration Module]:::orchestration
+        L5[Service Layer]:::service
+        L6[Circular Import Risk]:::risk
+    end
     
-    %% Direct dependencies
-    A -.-> C
-    A -.-> D
-    A -.-> E
-    A -.-> F
-    A -.-> G
-    A -.-> H
-    A -.-> J
+    %% Main graph direction (left to right for the actual modules)
+    subgraph mainGraph [" "]
+        direction LR
+        
+        %% Empty node to force legend to top
+        InvisibleNode[ ]:::invisible
+        
+        %% Main content starts here
+        subgraph Base_Level["Base Level"]
+            A[logging.py]
+        end
+        
+        subgraph Mid_Level["Mid Level"]
+            B[utility.py]
+            C[generator.py]
+            D[editor.py]
+            E[evaluator.py]
+        end
+        
+        subgraph High_Level["High Level"]
+            F[topologist.py]
+            G[dbbuilder.py]
+            H[retriever.py]
+            I[publisher.py]
+            J[planner.py]
+        end
+        
+        subgraph Orchestration_Layer["Orchestration"]
+            L[contextualiser.py]
+            M[executor.py]
+        end
+        
+        subgraph Service_Layer["Service"]
+            N[runner.py]
+        end
+        
+        %% Core flow (left to right)
+        A --> B & D
+        B --> C
+        C --> E
+        C --> G
+        D --> F
+        E --> F & H & J
+        G --> H
+        F --> L
+        H --> L
+        L --> M
+        M --> N
+        
+        %% Cross-layer dependencies
+        B --> I
+    end
     
-    %% Additional dependencies
-    C -.-> F
-    C -.-> J
-    B -.-> E
-    B -.-> F
-    B -.-> H
-    B -.-> J
+    %% Connect legend to main graph (invisible connection)
+    Legend --> InvisibleNode[ ]
     
-    %% H --> G
+    %% Style the subgraphs
+    classDef subgraphStyle fill:none,stroke:#888,stroke-width:2px,stroke-dasharray: 5 5,color:#666
+    classDef legendStyle fill:#f8f9fa,stroke:#dee2e6,stroke-width:2px,color:#212529
+    classDef subgraphTitle fill:none,stroke:none,font-weight:bold,font-size:14px
+    classDef invisible fill:none,stroke:none,color:none,width:0,height:0
     
-    %% Styling
+    class Service_Layer,Orchestration_Layer,High_Level,Mid_Level,Base_Level subgraphStyle
+    class Legend legendStyle
+    class InvisibleNode invisible
+    
+    %% Node styling
     classDef base fill:#ddd,stroke:#333,stroke-width:1px
     classDef mid fill:#bbdefb,stroke:#333,stroke-width:1px
     classDef high fill:#c8e6c9,stroke:#333,stroke-width:1px
-    classDef service fill:#d1c4e9,stroke:#333,stroke-width:1px
+    classDef orchestration fill:#ffe0b2,stroke:#333,stroke-width:1px
+    classDef service fill:#e1bee7,stroke:#7b1fa2,stroke-width:2px
     classDef risk fill:#ffcdd2,stroke:#333,stroke-width:1px
     
+    %% Apply styles to nodes
     class A base
     class B,C,D,E mid
     class F,G,H,I,J high
-    class K service
+    class L,M orchestration
+    class N service
     
-    %% Legend
-    subgraph Legend
-        L1[Base Level Module]
-        L2[Mid Level Module]
-        L3[High Level Module]
-        L4[Service Module]
-        L5[Circular Import Risk]
+    %% Define subgraphs for each layer (left to right)
+    subgraph Base_Level["Base Level"]
+        A[logging.py]
     end
     
-    class L1 base
-    class L2 mid
-    class L3 high
-    class L4 service
-    class L5 risk
+    subgraph Mid_Level["Mid Level"]
+        B[utility.py]
+        C[generator.py]
+        D[editor.py]
+        E[evaluator.py]
+    end
+    
+    subgraph High_Level["High Level"]
+        F[topologist.py]
+        G[dbbuilder.py]
+        H[retriever.py]
+        I[publisher.py]
+        J[planner.py]
+    end
+    
+    subgraph Orchestration_Layer["Orchestration"]
+        L[contextualiser.py]
+        M[executor.py]
+    end
+    
+    subgraph Service_Layer["Service"]
+        N[runner.py]
+    end
+    
+    %% Core flow (left to right)
+    A --> B & D
+    B --> C
+    C --> E
+    C --> G
+    D --> F
+    E --> F & H & J
+    G --> H
+    F --> L
+    H --> L
+    L --> M
+    M --> N
+    
+    %% Cross-layer dependencies
+    B --> I
+    
+    %% Style the subgraphs
+    classDef subgraphStyle fill:none,stroke:#888,stroke-width:2px,stroke-dasharray: 5 5,color:#666
+    classDef subgraphTitle fill:none,stroke:none,font-weight:bold,font-size:14px
+    
+    class Service_Layer,Orchestration_Layer,High_Level,Mid_Level,Base_Level,Legend subgraphStyle
+    
+    %% Node styling
+    classDef base fill:#ddd,stroke:#333,stroke-width:1px
+    classDef mid fill:#bbdefb,stroke:#333,stroke-width:1px
+    classDef high fill:#c8e6c9,stroke:#333,stroke-width:1px
+    classDef orchestration fill:#ffe0b2,stroke:#333,stroke-width:1px
+    classDef service fill:#e1bee7,stroke:#7b1fa2,stroke-width:2px
+    classDef risk fill:#ffcdd2,stroke:#333,stroke-width:1px
+    
+    %% Apply styles to nodes
+    class A base
+    class B,C,D,E mid
+    class F,G,H,I,J high
+    class L,M orchestration
+    class N service
 ```
 
-The diagram above illustrates:
-- Solid arrows represent primary dependencies
-- Dotted arrows represent additional dependencies
-- Red node indicates a module with circular import risk
-- Different colors represent different module levels (base, mid, high, service)
+The diagram above illustrates the layered architecture of the AutoLM system:
 
-## 3. Circular Import Risks
+### Architecture Layers:
+1. **Service Layer** (Purple): Top-level orchestration and API endpoints
+2. **Orchestration Layer** (Orange): Coordinates complex workflows and processes
+3. **High Level Modules** (Green): Domain-specific functionality and integrations
+4. **Mid Level Modules** (Blue): Core business logic and utilities
+5. **Base Level** (Gray): Foundational logging and core utilities
+
+### Diagram Elements:
+- Solid arrows: Primary dependencies and data flow
+- Dotted arrows: Secondary or optional dependencies
+- Colored nodes: Different module levels as defined in the legend
+- Dashed borders: Logical grouping of related modules
+
+### Key Flows:
+- Data flows from base modules up through the layers
+- Service layer coordinates across all components
+- Each layer builds on the functionality of the layers below it
+
+## 3. Service Layer Architecture
+
+The `service/runner.py` module serves as the top-level orchestrator of the AutoLM system. It's designed to:
+
+1. **Coordinate All Components**: Acts as the main entry point that ties together all core modules
+2. **Implement Workflow**: Manages the complete data flow from goal definition to task completion
+3. **Provide High-Level API**: Offers a clean interface for system interaction
+
+### Key Dependencies:
+- **Core Modules**: Directly imports from all major components
+- **Configuration Management**: Handles system-wide configuration
+- **Error Handling**: Implements comprehensive error handling and logging
+
+## 4. Circular Import Risks
 
 ### Identified Circular Dependencies:
 
